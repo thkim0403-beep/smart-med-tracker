@@ -6,10 +6,13 @@ import {
     TouchableOpacity,
     Alert,
     Switch,
+    Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
+import { useRouter } from "expo-router";
 import { useMedStore } from "../../src/store/medStore";
+import { useAuthStore } from "../../src/store/authStore";
 import {
     cancelAllReminders,
     getScheduledReminders,
@@ -17,7 +20,9 @@ import {
 } from "../../src/services/notifications";
 
 export default function SettingsScreen() {
+    const router = useRouter();
     const { meds, loadMeds, deleteMed } = useMedStore();
+    const { user, signOut } = useAuthStore();
     const [notificationsEnabled, setNotificationsEnabled] = useState(false);
     const [scheduledCount, setScheduledCount] = useState(0);
 
@@ -25,6 +30,24 @@ export default function SettingsScreen() {
         loadMeds();
         checkNotificationStatus();
     }, []);
+
+    const handleLogout = () => {
+        Alert.alert(
+            "로그아웃",
+            "정말 로그아웃 하시겠습니까?",
+            [
+                { text: "취소", style: "cancel" },
+                {
+                    text: "로그아웃",
+                    style: "destructive",
+                    onPress: async () => {
+                        await signOut();
+                        router.replace("/login");
+                    },
+                },
+            ]
+        );
+    };
 
     const checkNotificationStatus = async () => {
         const { status } = await Notifications.getPermissionsAsync();
@@ -93,6 +116,65 @@ export default function SettingsScreen() {
 
     return (
         <ScrollView className="flex-1 bg-gray-50">
+            {/* User Profile Section */}
+            {user && (
+                <View className="mt-4 mx-4">
+                    <Text className="text-gray-500 font-semibold mb-2 uppercase text-xs">
+                        계정
+                    </Text>
+                    <View className="bg-white rounded-2xl overflow-hidden">
+                        <View className="flex-row items-center p-4 border-b border-gray-100">
+                            {user.picture ? (
+                                <Image
+                                    source={{ uri: user.picture }}
+                                    className="w-12 h-12 rounded-full"
+                                />
+                            ) : (
+                                <View className="bg-primary/10 w-12 h-12 rounded-full items-center justify-center">
+                                    <Ionicons name="person" size={24} color="#007AFF" />
+                                </View>
+                            )}
+                            <View className="ml-3 flex-1">
+                                <Text className="text-gray-800 font-semibold text-lg">
+                                    {user.name}
+                                </Text>
+                                <Text className="text-gray-500 text-sm">
+                                    {user.email}
+                                </Text>
+                                <View className="flex-row items-center mt-1">
+                                    <View
+                                        className="px-2 py-1 rounded-full"
+                                        style={{
+                                            backgroundColor:
+                                                user.provider === "google"
+                                                    ? "#4285F4"
+                                                    : "#03C75A",
+                                        }}
+                                    >
+                                        <Text className="text-white text-xs font-medium">
+                                            {user.provider === "google" ? "Google" : "Naver"}
+                                        </Text>
+                                    </View>
+                                </View>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            onPress={handleLogout}
+                            className="flex-row items-center p-4"
+                        >
+                            <View className="bg-red-100 w-10 h-10 rounded-xl items-center justify-center">
+                                <Ionicons name="log-out" size={22} color="#FF3B30" />
+                            </View>
+                            <Text className="ml-3 text-red-500 font-medium flex-1">
+                                로그아웃
+                            </Text>
+                            <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
+
             {/* Notifications Section */}
             <View className="mt-4 mx-4">
                 <Text className="text-gray-500 font-semibold mb-2 uppercase text-xs">

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
     View,
     Text,
@@ -9,14 +9,69 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useMedStore } from "../../src/store/medStore";
 import { MedCard } from "../../src/components/MedCard";
+import { ComplianceCalendar } from "../../src/components/ComplianceCalendar";
+import * as dbOps from "../../src/database/operations";
+import { DailyStats } from "../../src/database/operations";
+
+type PeriodType = "today" | "week" | "month";
 
 export default function HomeScreen() {
     const { meds, logs, loadMeds, loadTodayLogs, markAsTaken, isLoading } = useMedStore();
+    const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>("today");
+    const [periodStats, setPeriodStats] = useState({
+        completed: 0,
+        total: 0,
+        progress: 0,
+    });
+    const [dailyStats, setDailyStats] = useState<DailyStats[]>([]);
 
     useEffect(() => {
         loadMeds();
         loadTodayLogs();
     }, []);
+
+    useEffect(() => {
+        calculatePeriodStats();
+    }, [selectedPeriod, meds, logs]);
+
+    const calculatePeriodStats = async () => {
+        const today = new Date();
+        let startDate: string;
+        let endDate: string = today.toISOString().split("T")[0];
+
+        if (selectedPeriod === "today") {
+            // 오늘 복용률 (기존 로직)
+            const totalDoses = meds.reduce((sum, med) => sum + med.daily_freq, 0);
+            const completedDoses = logs.filter(log => log.status === "taken").length;
+            const progress = totalDoses > 0 ? (completedDoses / totalDoses) * 100 : 0;
+            setPeriodStats({ completed: completedDoses, total: totalDoses, progress });
+            return;
+        } else if (selectedPeriod === "week") {
+            // 일주일 전
+            const weekAgo = new Date(today);
+            weekAgo.setDate(weekAgo.getDate() - 6);
+            startDate = weekAgo.toISOString().split("T")[0];
+        } else {
+            // 한달 전
+            const monthAgo = new Date(today);
+            monthAgo.setDate(monthAgo.getDate() - 29);
+            startDate = monthAgo.toISOString().split("T")[0];
+        }
+
+        try {
+            const periodLogs = await dbOps.getLogsByDateRange(startDate, endDate);
+            const expectedDoses = await dbOps.getExpectedDosesByDateRange(startDate, endDate);
+            const completedDoses = periodLogs.filter(log => log.status === "taken").length;
+            const progress = expectedDoses > 0 ? (completedDoses / expectedDoses) * 100 : 0;
+            setPeriodStats({ completed: completedDoses, total: expectedDoses, progress });
+
+            // 일별 통계 가져오기 (달력용)
+            const daily = await dbOps.getDailyComplianceStats(startDate, endDate);
+            setDailyStats(daily);
+        } catch (error) {
+            console.error("Failed to calculate period stats:", error);
+        }
+    };
 
     const onRefresh = () => {
         loadMeds();
@@ -31,13 +86,14 @@ export default function HomeScreen() {
         weekday: "long",
     });
 
-    // 오늘 복용해야 할 총 횟수와 완료 횟수 계산
-    const totalDoses = meds.reduce((sum, med) => sum + med.daily_freq, 0);
-    const completedDoses = logs.filter(log => log.status === "taken").length;
-    const progress = totalDoses > 0 ? (completedDoses / totalDoses) * 100 : 0;
-
     // 현재 시간 기준으로 다음 복용 약 찾기
     const currentTime = today.toTimeString().slice(0, 5); // "HH:mm" 형식
+
+    const periodLabels = {
+        today: "오늘",
+        week: "7일",
+        month: "30일",
+    };
 
     return (
         <ScrollView
@@ -74,13 +130,49 @@ export default function HomeScreen() {
                     shadowRadius: 8,
                     elevation: 4,
                 }}>
+                    {/* 기간 선택 버튼 */}
+                    <View style={{
+                        flexDirection: "row",
+                        backgroundColor: "#F3F4F6",
+                        borderRadius: 12,
+                        padding: 4,
+                        marginBottom: 16,
+                    }}>
+                        {(["today", "week", "month"] as PeriodType[]).map((period) => (
+                            <TouchableOpacity
+                                key={period}
+                                onPress={() => setSelectedPeriod(period)}
+                                style={{
+                                    flex: 1,
+                                    paddingVertical: 10,
+                                    borderRadius: 10,
+                                    backgroundColor: selectedPeriod === period ? "white" : "transparent",
+                                    shadowColor: selectedPeriod === period ? "#000" : "transparent",
+                                    shadowOffset: { width: 0, height: 2 },
+                                    shadowOpacity: selectedPeriod === period ? 0.1 : 0,
+                                    shadowRadius: 4,
+                                    elevation: selectedPeriod === period ? 2 : 0,
+                                }}
+                            >
+                                <Text style={{
+                                    textAlign: "center",
+                                    fontWeight: selectedPeriod === period ? "bold" : "500",
+                                    color: selectedPeriod === period ? "#007AFF" : "#6B7280",
+                                    fontSize: 15,
+                                }}>
+                                    {periodLabels[period]}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                         <View>
                             <Text style={{ fontSize: 16, color: "#6B7280" }}>
-                                오늘 복용 진행률
+                                {periodLabels[selectedPeriod]} 복용 진행률
                             </Text>
                             <Text style={{ fontSize: 32, fontWeight: "bold", color: "#1F2937", marginTop: 4 }}>
-                                {completedDoses} / {totalDoses}
+                                {periodStats.completed} / {periodStats.total}
                             </Text>
                         </View>
                         <View style={{
@@ -88,17 +180,17 @@ export default function HomeScreen() {
                             height: 80,
                             borderRadius: 40,
                             borderWidth: 8,
-                            borderColor: progress >= 100 ? "#10B981" : "#E5E7EB",
+                            borderColor: periodStats.progress >= 100 ? "#10B981" : periodStats.progress >= 70 ? "#007AFF" : "#F59E0B",
                             alignItems: "center",
                             justifyContent: "center",
-                            backgroundColor: progress >= 100 ? "#D1FAE5" : "#F9FAFB",
+                            backgroundColor: periodStats.progress >= 100 ? "#D1FAE5" : "#F9FAFB",
                         }}>
                             <Text style={{
                                 fontSize: 20,
                                 fontWeight: "bold",
-                                color: progress >= 100 ? "#10B981" : "#374151",
+                                color: periodStats.progress >= 100 ? "#10B981" : periodStats.progress >= 70 ? "#007AFF" : "#F59E0B",
                             }}>
-                                {Math.round(progress)}%
+                                {Math.round(periodStats.progress)}%
                             </Text>
                         </View>
                     </View>
@@ -113,13 +205,13 @@ export default function HomeScreen() {
                     }}>
                         <View style={{
                             height: "100%",
-                            width: `${Math.min(progress, 100)}%`,
-                            backgroundColor: progress >= 100 ? "#10B981" : "#007AFF",
+                            width: `${Math.min(periodStats.progress, 100)}%`,
+                            backgroundColor: periodStats.progress >= 100 ? "#10B981" : periodStats.progress >= 70 ? "#007AFF" : "#F59E0B",
                             borderRadius: 6,
                         }} />
                     </View>
 
-                    {progress >= 100 && (
+                    {periodStats.progress >= 100 && selectedPeriod === "today" && (
                         <View style={{
                             flexDirection: "row",
                             alignItems: "center",
@@ -134,6 +226,31 @@ export default function HomeScreen() {
                                 오늘 복용을 모두 완료했어요! 🎉
                             </Text>
                         </View>
+                    )}
+
+                    {selectedPeriod !== "today" && periodStats.progress >= 80 && (
+                        <View style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                            marginTop: 12,
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            backgroundColor: "#DBEAFE",
+                            borderRadius: 10,
+                        }}>
+                            <Ionicons name="star" size={20} color="#3B82F6" />
+                            <Text style={{ marginLeft: 8, color: "#1D4ED8", fontWeight: "600" }}>
+                                훌륭해요! 복용률이 {Math.round(periodStats.progress)}%입니다! ⭐
+                            </Text>
+                        </View>
+                    )}
+
+                    {/* 달력 (7일, 30일 선택 시) */}
+                    {selectedPeriod !== "today" && dailyStats.length > 0 && (
+                        <ComplianceCalendar
+                            days={dailyStats}
+                            periodType={selectedPeriod}
+                        />
                     )}
                 </View>
             </View>

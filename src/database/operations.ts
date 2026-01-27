@@ -129,3 +129,100 @@ export async function getLogByMedIdAndTime(
         [medId, startOfSlot, endOfSlot]
     );
 }
+
+// 기간별 로그 조회 (일주일, 한달 등)
+export async function getLogsByDateRange(
+    startDate: string, // YYYY-MM-DD
+    endDate: string // YYYY-MM-DD
+): Promise<(Log & { med_name: string })[]> {
+    const db = await getDatabase();
+    return await db.getAllAsync<Log & { med_name: string }>(
+        `SELECT l.*, m.name as med_name 
+     FROM Logs l 
+     JOIN Meds m ON l.med_id = m.id 
+     WHERE date(l.taken_at) >= date(?) 
+     AND date(l.taken_at) <= date(?)
+     ORDER BY l.taken_at DESC`,
+        [startDate, endDate]
+    );
+}
+
+// 기간 내 예상 복용 횟수 계산 (일수 * 각 약의 daily_freq)
+export async function getExpectedDosesByDateRange(
+    startDate: string,
+    endDate: string
+): Promise<number> {
+    const db = await getDatabase();
+
+    // 시작일과 종료일 사이의 일수 계산
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    // 해당 기간에 활성화된 약들의 daily_freq 합계
+    const meds = await db.getAllAsync<Med>(
+        `SELECT * FROM Meds 
+     WHERE date(start_date) <= date(?)
+     AND date(start_date, '+' || duration_days || ' days') >= date(?)`,
+        [endDate, startDate]
+    );
+
+    return meds.reduce((sum, med) => sum + (med.daily_freq * days), 0);
+}
+
+// 일별 복용 통계 (달력용)
+export interface DailyStats {
+    date: string;
+    completed: number;
+    total: number;
+    percentage: number;
+}
+
+export async function getDailyComplianceStats(
+    startDate: string,
+    endDate: string
+): Promise<DailyStats[]> {
+    const db = await getDatabase();
+    const results: DailyStats[] = [];
+
+    // 시작일부터 종료일까지 순회
+    const current = new Date(startDate);
+    const end = new Date(endDate);
+
+    while (current <= end) {
+        const dateStr = current.toISOString().split("T")[0];
+
+        // 해당 날짜에 활성화된 약 목록
+        const activeMeds = await db.getAllAsync<Med>(
+            `SELECT * FROM Meds 
+             WHERE date(start_date) <= date(?)
+             AND date(start_date, '+' || duration_days || ' days') >= date(?)`,
+            [dateStr, dateStr]
+        );
+
+        // 해당 날짜의 예상 복용 횟수
+        const totalDoses = activeMeds.reduce((sum, med) => sum + med.daily_freq, 0);
+
+        // 해당 날짜의 실제 복용 횟수
+        const logs = await db.getAllAsync<Log>(
+            `SELECT * FROM Logs 
+             WHERE date(taken_at) = date(?)
+             AND status = 'taken'`,
+            [dateStr]
+        );
+
+        const completedDoses = logs.length;
+        const percentage = totalDoses > 0 ? (completedDoses / totalDoses) * 100 : 0;
+
+        results.push({
+            date: dateStr,
+            completed: completedDoses,
+            total: totalDoses,
+            percentage,
+        });
+
+        current.setDate(current.getDate() + 1);
+    }
+
+    return results;
+}
