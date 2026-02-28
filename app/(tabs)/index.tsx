@@ -9,6 +9,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useMedStore } from "../../src/store/medStore";
 import { MedCard } from "../../src/components/MedCard";
+import { MedGroupCard } from "../../src/components/MedGroupCard";
 import { ComplianceCalendar } from "../../src/components/ComplianceCalendar";
 import * as dbOps from "../../src/database/operations";
 import { DailyStats } from "../../src/database/operations";
@@ -16,7 +17,7 @@ import { DailyStats } from "../../src/database/operations";
 type PeriodType = "today" | "week" | "month";
 
 export default function HomeScreen() {
-    const { meds, logs, loadMeds, loadTodayLogs, markAsTaken, isLoading } = useMedStore();
+    const { meds, logs, groups, loadMeds, loadTodayLogs, markAsTaken, markGroupAsTaken, isLoading } = useMedStore();
     const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>("today");
     const [periodStats, setPeriodStats] = useState({
         completed: 0,
@@ -293,7 +294,24 @@ export default function HomeScreen() {
                     </View>
                 ) : (
                     <View style={{ gap: 12 }}>
-                        {meds.map((med) => (
+                        {/* 그룹별 약 표시 */}
+                        {groups.map((group) => {
+                            const groupMeds = meds.filter(m => m.group_id === group.id);
+                            if (groupMeds.length === 0) return null;
+                            return (
+                                <MedGroupCard
+                                    key={`group-${group.id}`}
+                                    group={group}
+                                    meds={groupMeds}
+                                    logs={logs}
+                                    onMarkGroupTaken={(groupId) => markGroupAsTaken(groupId)}
+                                    onMarkTaken={(medId) => markAsTaken(medId)}
+                                />
+                            );
+                        })}
+
+                        {/* 그룹 없는 약 개별 표시 */}
+                        {meds.filter(m => !m.group_id).map((med) => (
                             <MedCard
                                 key={med.id}
                                 med={med}

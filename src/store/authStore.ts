@@ -2,6 +2,7 @@ import { create } from "zustand";
 import {
     signInWithGoogle,
     signInWithNaver,
+    signInWithApple,
     signOut as authSignOut,
     loadStoredUser,
     UserInfo,
@@ -17,6 +18,7 @@ interface AuthStore {
     // Actions
     signInWithGoogle: () => Promise<boolean>;
     signInWithNaver: () => Promise<boolean>;
+    signInWithApple: () => Promise<boolean>;
     signOut: () => Promise<void>;
     loadStoredAuth: () => Promise<void>;
     clearError: () => void;
@@ -71,6 +73,34 @@ export const useAuthStore = create<AuthStore>((set) => ({
             } else {
                 set({
                     error: result.error || "네이버 로그인에 실패했습니다.",
+                    isLoading: false,
+                });
+                return false;
+            }
+        } catch (error) {
+            set({
+                error: error instanceof Error ? error.message : "로그인 중 오류가 발생했습니다.",
+                isLoading: false,
+            });
+            return false;
+        }
+    },
+
+    signInWithApple: async () => {
+        set({ isLoading: true, error: null });
+        try {
+            const result = await signInWithApple();
+
+            if (result.success && result.user) {
+                set({
+                    user: result.user,
+                    isAuthenticated: true,
+                    isLoading: false,
+                });
+                return true;
+            } else {
+                set({
+                    error: result.error || "Apple 로그인에 실패했습니다.",
                     isLoading: false,
                 });
                 return false;

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Med, Log } from "../database/schema";
@@ -10,6 +10,8 @@ interface MedCardProps {
 }
 
 export function MedCard({ med, logs, onMarkTaken }: MedCardProps) {
+    const [showOcrText, setShowOcrText] = useState(false);
+
     // 오늘 복용 완료 횟수
     const takenCount = logs.filter(log => log.status === "taken").length;
     const totalToday = med.daily_freq;
@@ -43,6 +45,11 @@ export function MedCard({ med, logs, onMarkTaken }: MedCardProps) {
                     <Text style={{ fontSize: 20, fontWeight: "bold", color: "#1F2937" }}>
                         💊 {med.name}
                     </Text>
+                    {med.memo ? (
+                        <Text style={{ fontSize: 14, color: "#8B5CF6", fontWeight: "600", marginTop: 4 }}>
+                            📝 {med.memo}
+                        </Text>
+                    ) : null}
                     <Text style={{ fontSize: 14, color: "#6B7280", marginTop: 4 }}>
                         1일 {med.daily_freq}회 • {med.duration_days}일분
                     </Text>
@@ -64,6 +71,40 @@ export function MedCard({ med, logs, onMarkTaken }: MedCardProps) {
                     </Text>
                 </View>
             </View>
+
+            {/* OCR 텍스트 토글 */}
+            {med.ocr_text ? (
+                <View style={{ marginTop: 12 }}>
+                    <TouchableOpacity
+                        onPress={() => setShowOcrText(!showOcrText)}
+                        style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                        }}
+                    >
+                        <Ionicons
+                            name={showOcrText ? "chevron-up" : "chevron-down"}
+                            size={16}
+                            color="#6B7280"
+                        />
+                        <Text style={{ fontSize: 13, color: "#6B7280", marginLeft: 4 }}>
+                            {showOcrText ? "OCR 텍스트 닫기" : "OCR 텍스트 보기"}
+                        </Text>
+                    </TouchableOpacity>
+                    {showOcrText && (
+                        <View style={{
+                            backgroundColor: "#F3F4F6",
+                            borderRadius: 12,
+                            padding: 12,
+                            marginTop: 8,
+                        }}>
+                            <Text style={{ fontSize: 13, color: "#4B5563", lineHeight: 20 }}>
+                                {med.ocr_text}
+                            </Text>
+                        </View>
+                    )}
+                </View>
+            ) : null}
 
             {/* 진행 바 */}
             <View style={{

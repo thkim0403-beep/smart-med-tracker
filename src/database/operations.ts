@@ -1,12 +1,12 @@
-import { getDatabase, Med, Alarm, Log } from "./schema";
+import { getDatabase, Med, MedGroup, Alarm, Log } from "./schema";
 
 // ==================== Meds Operations ====================
 
 export async function addMed(med: Omit<Med, "id">): Promise<number> {
     const db = await getDatabase();
     const result = await db.runAsync(
-        `INSERT INTO Meds (name, daily_freq, duration_days, start_date) VALUES (?, ?, ?, ?)`,
-        [med.name, med.daily_freq, med.duration_days, med.start_date]
+        `INSERT INTO Meds (name, daily_freq, duration_days, start_date, group_id, ocr_text, memo) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [med.name, med.daily_freq, med.duration_days, med.start_date, med.group_id ?? null, med.ocr_text ?? null, med.memo ?? null]
     );
     return result.lastInsertRowId;
 }
@@ -168,6 +168,54 @@ export async function getExpectedDosesByDateRange(
     );
 
     return meds.reduce((sum, med) => sum + (med.daily_freq * days), 0);
+}
+
+// ==================== MedGroups Operations ====================
+
+export async function addMedGroup(name: string): Promise<number> {
+    const db = await getDatabase();
+    const result = await db.runAsync(
+        `INSERT INTO MedGroups (name) VALUES (?)`,
+        [name]
+    );
+    return result.lastInsertRowId;
+}
+
+export async function getAllMedGroups(): Promise<MedGroup[]> {
+    const db = await getDatabase();
+    return await db.getAllAsync<MedGroup>("SELECT * FROM MedGroups ORDER BY id");
+}
+
+export async function updateMedGroup(id: number, name: string): Promise<void> {
+    const db = await getDatabase();
+    await db.runAsync("UPDATE MedGroups SET name = ? WHERE id = ?", [name, id]);
+}
+
+export async function deleteMedGroup(id: number): Promise<void> {
+    const db = await getDatabase();
+    // 그룹 삭제 시 해당 약들의 group_id를 null로 설정
+    await db.runAsync("UPDATE Meds SET group_id = NULL WHERE group_id = ?", [id]);
+    await db.runAsync("DELETE FROM MedGroups WHERE id = ?", [id]);
+}
+
+export async function getMedsByGroupId(groupId: number): Promise<Med[]> {
+    const db = await getDatabase();
+    return await db.getAllAsync<Med>(
+        "SELECT * FROM Meds WHERE group_id = ? ORDER BY name",
+        [groupId]
+    );
+}
+
+export async function getUngroupedMeds(): Promise<Med[]> {
+    const db = await getDatabase();
+    return await db.getAllAsync<Med>(
+        "SELECT * FROM Meds WHERE group_id IS NULL ORDER BY start_date DESC"
+    );
+}
+
+export async function assignMedToGroup(medId: number, groupId: number | null): Promise<void> {
+    const db = await getDatabase();
+    await db.runAsync("UPDATE Meds SET group_id = ? WHERE id = ?", [groupId, medId]);
 }
 
 // 일별 복용 통계 (달력용)

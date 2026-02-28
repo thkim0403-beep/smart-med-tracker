@@ -1,6 +1,8 @@
 import TextRecognition, {
+    TextRecognitionScript,
     TextRecognitionResult,
 } from "@react-native-ml-kit/text-recognition";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 
 export interface OCRResult {
     fullText: string;
@@ -16,7 +18,14 @@ export interface OCRResult {
  */
 export async function extractTextFromImage(imageUri: string): Promise<OCRResult> {
     try {
-        const result: TextRecognitionResult = await TextRecognition.recognize(imageUri);
+        // Preprocess: resize to optimal width for Korean character recognition (min 24x24px per char)
+        const preprocessed = await preprocessImage(imageUri);
+
+        // Use KOREAN script for accurate Korean text recognition
+        const result: TextRecognitionResult = await TextRecognition.recognize(
+            preprocessed,
+            TextRecognitionScript.KOREAN
+        );
 
         if (!result || !result.text) {
             return {
@@ -47,13 +56,33 @@ export async function extractTextFromImage(imageUri: string): Promise<OCRResult>
 }
 
 /**
- * Clean and normalize OCR text for better AI parsing
+ * Preprocess image for better OCR accuracy
+ * - Resize to optimal width (1280px) for Korean character recognition
+ * - Save as lossless PNG to avoid compression artifacts
+ */
+async function preprocessImage(imageUri: string): Promise<string> {
+    try {
+        const context = ImageManipulator.manipulate(imageUri);
+        const result = await context.resize({ width: 1280 }).renderAsync();
+        const saved = await result.saveAsync({
+            format: SaveFormat.PNG,
+            compress: 1.0,
+        });
+        return saved.uri;
+    } catch (error) {
+        console.warn("Image preprocessing failed, using original:", error);
+        return imageUri;
+    }
+}
+
+/**
+ * Clean and normalize OCR text for medicine bag parsing
  * @param text - Raw OCR text
  * @returns Cleaned text
  */
 export function cleanOCRText(text: string): string {
     return text
-        .replace(/\s+/g, " ") // Normalize whitespace
-        .replace(/[^\w가-힣\s.,:/()-]/g, "") // Keep Korean, alphanumeric, and basic punctuation
+        .replace(/\s+/g, " ")
+        .replace(/[^\w가-힣\s.,;:/#()\-+%]/g, "") // Keep medical notation chars (#, %, +)
         .trim();
 }

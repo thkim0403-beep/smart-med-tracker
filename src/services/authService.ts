@@ -1,8 +1,10 @@
 import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import * as Crypto from "expo-crypto";
+import * as AppleAuthentication from "expo-apple-authentication";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 
 // WebBrowser warm up for faster auth
 WebBrowser.maybeCompleteAuthSession();
@@ -17,7 +19,7 @@ export interface UserInfo {
     email: string;
     name: string;
     picture?: string;
-    provider: "google" | "naver";
+    provider: "google" | "naver" | "apple";
 }
 
 export interface AuthResult {
@@ -210,6 +212,57 @@ async function getNaverUserInfo(accessToken: string): Promise<UserInfo> {
         picture: profile.profile_image,
         provider: "naver",
     };
+}
+
+/**
+ * Sign in with Apple (iOS only)
+ */
+export async function signInWithApple(): Promise<AuthResult> {
+    try {
+        if (Platform.OS !== "ios") {
+            return { success: false, error: "Apple 로그인은 iOS에서만 사용할 수 있습니다." };
+        }
+
+        const isAvailable = await AppleAuthentication.isAvailableAsync();
+        if (!isAvailable) {
+            return { success: false, error: "이 기기에서는 Apple 로그인을 사용할 수 없습니다." };
+        }
+
+        const credential = await AppleAuthentication.signInAsync({
+            requestedScopes: [
+                AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+                AppleAuthentication.AppleAuthenticationScope.EMAIL,
+            ],
+        });
+
+        // Apple only provides name/email on FIRST sign-in.
+        // On subsequent sign-ins these fields are null, so we fall back to stored data.
+        const storedUser = await loadStoredUser();
+
+        const userInfo: UserInfo = {
+            id: credential.user,
+            email: credential.email || storedUser?.email || "",
+            name:
+                credential.fullName?.givenName && credential.fullName?.familyName
+                    ? `${credential.fullName.familyName}${credential.fullName.givenName}`
+                    : storedUser?.name || "Apple 사용자",
+            provider: "apple",
+        };
+
+        await AsyncStorage.setItem(AUTH_TOKEN_KEY, credential.identityToken || credential.user);
+        await AsyncStorage.setItem(USER_INFO_KEY, JSON.stringify(userInfo));
+
+        return { success: true, user: userInfo };
+    } catch (error: any) {
+        if (error.code === "ERR_REQUEST_CANCELED") {
+            return { success: false, error: "사용자가 로그인을 취소했습니다." };
+        }
+        console.error("Apple sign in error:", error);
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "Apple 로그인 중 오류가 발생했습니다.",
+        };
+    }
 }
 
 /**

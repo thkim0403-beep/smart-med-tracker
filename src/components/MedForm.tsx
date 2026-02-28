@@ -8,18 +8,22 @@ import {
     Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { MedGroup } from "../database/schema";
 
-interface MedFormData {
+export interface MedFormData {
     name: string;
     timesPerDay: number;
     times: string[];
     duration: number;
+    groupId?: number | null;
+    memo?: string;
 }
 
 interface MedFormProps {
     initialData?: Partial<MedFormData>;
     onSubmit: (data: MedFormData) => void;
     isLoading?: boolean;
+    groups?: MedGroup[];
 }
 
 const DEFAULT_TIMES: Record<number, string[]> = {
@@ -44,7 +48,7 @@ const TIME_PRESETS = [
 // 일수 프리셋
 const DURATION_PRESETS = [3, 5, 7, 14, 21, 30];
 
-export function MedForm({ initialData, onSubmit, isLoading }: MedFormProps) {
+export function MedForm({ initialData, onSubmit, isLoading, groups = [] }: MedFormProps) {
     const [name, setName] = useState(initialData?.name || "");
     const [timesPerDay, setTimesPerDay] = useState(
         initialData?.timesPerDay?.toString() || "3"
@@ -56,6 +60,10 @@ export function MedForm({ initialData, onSubmit, isLoading }: MedFormProps) {
         initialData?.duration?.toString() || "7"
     );
     const [selectedTimeIndex, setSelectedTimeIndex] = useState<number | null>(null);
+    const [selectedGroupId, setSelectedGroupId] = useState<number | null>(
+        initialData?.groupId ?? null
+    );
+    const [memo, setMemo] = useState(initialData?.memo || "");
 
     const handleTimesPerDayChange = (value: string) => {
         setTimesPerDay(value);
@@ -96,6 +104,8 @@ export function MedForm({ initialData, onSubmit, isLoading }: MedFormProps) {
             timesPerDay: numTimesPerDay,
             times: times.slice(0, numTimesPerDay),
             duration: numDuration,
+            groupId: selectedGroupId,
+            memo: memo.trim() || undefined,
         });
     };
 
@@ -297,6 +307,91 @@ export function MedForm({ initialData, onSubmit, isLoading }: MedFormProps) {
                             </View>
                         ))}
                     </View>
+                </View>
+
+                {/* Group Selection */}
+                {groups.length > 0 && (
+                    <View style={{ marginBottom: 24 }}>
+                        <Text style={{
+                            fontSize: 18,
+                            fontWeight: 'bold',
+                            color: '#374151',
+                            marginBottom: 12
+                        }}>
+                            📁 그룹 선택
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                            <TouchableOpacity
+                                onPress={() => setSelectedGroupId(null)}
+                                style={{
+                                    paddingHorizontal: 20,
+                                    paddingVertical: 14,
+                                    borderRadius: 16,
+                                    backgroundColor: selectedGroupId === null ? '#6B7280' : 'white',
+                                    borderWidth: 2,
+                                    borderColor: selectedGroupId === null ? '#6B7280' : '#E5E7EB',
+                                }}
+                            >
+                                <Text style={{
+                                    fontSize: 16,
+                                    fontWeight: '600',
+                                    color: selectedGroupId === null ? 'white' : '#374151',
+                                }}>
+                                    없음
+                                </Text>
+                            </TouchableOpacity>
+                            {groups.map((group) => (
+                                <TouchableOpacity
+                                    key={group.id}
+                                    onPress={() => setSelectedGroupId(group.id!)}
+                                    style={{
+                                        paddingHorizontal: 20,
+                                        paddingVertical: 14,
+                                        borderRadius: 16,
+                                        backgroundColor: selectedGroupId === group.id ? '#8B5CF6' : 'white',
+                                        borderWidth: 2,
+                                        borderColor: selectedGroupId === group.id ? '#8B5CF6' : '#E5E7EB',
+                                    }}
+                                >
+                                    <Text style={{
+                                        fontSize: 16,
+                                        fontWeight: '600',
+                                        color: selectedGroupId === group.id ? 'white' : '#374151',
+                                    }}>
+                                        {group.name}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                )}
+
+                {/* Memo */}
+                <View style={{ marginBottom: 24 }}>
+                    <Text style={{
+                        fontSize: 18,
+                        fontWeight: 'bold',
+                        color: '#374151',
+                        marginBottom: 12
+                    }}>
+                        📝 메모 (선택)
+                    </Text>
+                    <TextInput
+                        style={{
+                            backgroundColor: 'white',
+                            borderRadius: 16,
+                            paddingHorizontal: 20,
+                            paddingVertical: 18,
+                            fontSize: 18,
+                            color: '#1F2937',
+                            borderWidth: 2,
+                            borderColor: memo ? '#8B5CF6' : '#E5E7EB',
+                        }}
+                        placeholder="예: 감기약, 혈압약"
+                        value={memo}
+                        onChangeText={setMemo}
+                        placeholderTextColor="#9CA3AF"
+                    />
                 </View>
 
                 {/* Duration */}

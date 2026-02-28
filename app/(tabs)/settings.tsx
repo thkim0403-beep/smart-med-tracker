@@ -7,6 +7,8 @@ import {
     Alert,
     Switch,
     Image,
+    TextInput,
+    Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
@@ -21,13 +23,19 @@ import {
 
 export default function SettingsScreen() {
     const router = useRouter();
-    const { meds, loadMeds, deleteMed } = useMedStore();
+    const { meds, loadMeds, deleteMed, groups, loadGroups, addGroup, updateGroup, deleteGroup, assignMedToGroup } = useMedStore();
     const { user, signOut } = useAuthStore();
     const [notificationsEnabled, setNotificationsEnabled] = useState(false);
     const [scheduledCount, setScheduledCount] = useState(0);
+    const [showGroupModal, setShowGroupModal] = useState(false);
+    const [groupName, setGroupName] = useState("");
+    const [editingGroup, setEditingGroup] = useState<{ id: number; name: string } | null>(null);
+    const [showMedGroupModal, setShowMedGroupModal] = useState(false);
+    const [selectedMedForGroup, setSelectedMedForGroup] = useState<{ id: number; name: string; group_id?: number | null } | null>(null);
 
     useEffect(() => {
         loadMeds();
+        loadGroups();
         checkNotificationStatus();
     }, []);
 
@@ -112,6 +120,53 @@ export default function SettingsScreen() {
                 },
             ]
         );
+    };
+
+    const handleAddGroup = async () => {
+        if (!groupName.trim()) {
+            Alert.alert("입력 필요", "그룹 이름을 입력해주세요.");
+            return;
+        }
+        await addGroup(groupName.trim());
+        setGroupName("");
+        setShowGroupModal(false);
+    };
+
+    const handleEditGroup = (group: { id: number; name: string }) => {
+        setEditingGroup(group);
+        setGroupName(group.name);
+        setShowGroupModal(true);
+    };
+
+    const handleUpdateGroup = async () => {
+        if (!editingGroup || !groupName.trim()) return;
+        await updateGroup(editingGroup.id, groupName.trim());
+        setEditingGroup(null);
+        setGroupName("");
+        setShowGroupModal(false);
+    };
+
+    const handleDeleteGroup = (id: number, name: string) => {
+        Alert.alert("그룹 삭제", `"${name}" 그룹을 삭제하시겠습니까?\n그룹 내 약은 그룹 없음으로 변경됩니다.`, [
+            { text: "취소", style: "cancel" },
+            {
+                text: "삭제",
+                style: "destructive",
+                onPress: () => deleteGroup(id),
+            },
+        ]);
+    };
+
+    const handleChangeMedGroup = (med: { id: number; name: string; group_id?: number | null }) => {
+        setSelectedMedForGroup(med);
+        setShowMedGroupModal(true);
+    };
+
+    const handleAssignMedToGroup = async (groupId: number | null) => {
+        if (!selectedMedForGroup) return;
+        await assignMedToGroup(selectedMedForGroup.id, groupId);
+        setShowMedGroupModal(false);
+        setSelectedMedForGroup(null);
     };
 
     return (
@@ -216,6 +271,69 @@ export default function SettingsScreen() {
                 </View>
             </View>
 
+            {/* Group Management */}
+            <View className="mt-6 mx-4">
+                <Text className="text-gray-500 font-semibold mb-2 uppercase text-xs">
+                    그룹 관리
+                </Text>
+                <View className="bg-white rounded-2xl overflow-hidden">
+                    {groups.length === 0 ? (
+                        <View className="p-6 items-center">
+                            <Text className="text-gray-400">등록된 그룹이 없습니다</Text>
+                        </View>
+                    ) : (
+                        groups.map((group, index) => {
+                            const groupMedCount = meds.filter(m => m.group_id === group.id).length;
+                            return (
+                                <View
+                                    key={group.id}
+                                    className={`flex-row items-center p-4 ${index < groups.length - 1 ? "border-b border-gray-100" : ""}`}
+                                >
+                                    <View style={{ backgroundColor: "#F3E8FF" }} className="w-10 h-10 rounded-xl items-center justify-center">
+                                        <Ionicons name="folder" size={22} color="#8B5CF6" />
+                                    </View>
+                                    <View className="ml-3 flex-1">
+                                        <Text className="text-gray-800 font-semibold">{group.name}</Text>
+                                        <Text className="text-gray-500 text-sm">
+                                            {groupMedCount}개의 약
+                                        </Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        onPress={() => handleEditGroup({ id: group.id!, name: group.name })}
+                                        style={{ marginRight: 12 }}
+                                    >
+                                        <Ionicons name="create-outline" size={20} color="#007AFF" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={() => handleDeleteGroup(group.id!, group.name)}
+                                    >
+                                        <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                                    </TouchableOpacity>
+                                </View>
+                            );
+                        })
+                    )}
+
+                    {/* 그룹 추가 버튼 */}
+                    <TouchableOpacity
+                        onPress={() => {
+                            setEditingGroup(null);
+                            setGroupName("");
+                            setShowGroupModal(true);
+                        }}
+                        className={`flex-row items-center p-4 ${groups.length > 0 ? "border-t border-gray-100" : ""}`}
+                    >
+                        <View style={{ backgroundColor: "#ECFDF5" }} className="w-10 h-10 rounded-xl items-center justify-center">
+                            <Ionicons name="add-circle" size={22} color="#10B981" />
+                        </View>
+                        <Text className="ml-3 text-green-600 font-medium flex-1">
+                            새 그룹 추가
+                        </Text>
+                        <Ionicons name="chevron-forward" size={20} color="#C7C7CC" />
+                    </TouchableOpacity>
+                </View>
+            </View>
+
             {/* Medications List */}
             <View className="mt-6 mx-4">
                 <Text className="text-gray-500 font-semibold mb-2 uppercase text-xs">
@@ -227,28 +345,199 @@ export default function SettingsScreen() {
                             <Text className="text-gray-400">등록된 약이 없습니다</Text>
                         </View>
                     ) : (
-                        meds.map((med, index) => (
-                            <TouchableOpacity
-                                key={med.id}
-                                onPress={() => handleDeleteMed(med.id!, med.name)}
-                                className={`flex-row items-center p-4 ${index < meds.length - 1 ? "border-b border-gray-100" : ""
-                                    }`}
-                            >
-                                <View className="bg-primary/10 w-10 h-10 rounded-xl items-center justify-center">
-                                    <Ionicons name="medical" size={22} color="#007AFF" />
+                        meds.map((med, index) => {
+                            const medGroup = groups.find(g => g.id === med.group_id);
+                            return (
+                                <View
+                                    key={med.id}
+                                    className={`flex-row items-center p-4 ${index < meds.length - 1 ? "border-b border-gray-100" : ""}`}
+                                >
+                                    <View className="bg-primary/10 w-10 h-10 rounded-xl items-center justify-center">
+                                        <Ionicons name="medical" size={22} color="#007AFF" />
+                                    </View>
+                                    <View className="ml-3 flex-1">
+                                        <Text className="text-gray-800 font-semibold">{med.name}</Text>
+                                        <Text className="text-gray-500 text-sm">
+                                            1일 {med.daily_freq}회 • {med.duration_days}일분
+                                            {medGroup ? ` • ${medGroup.name}` : ""}
+                                        </Text>
+                                    </View>
+                                    <TouchableOpacity
+                                        onPress={() => handleChangeMedGroup({ id: med.id!, name: med.name, group_id: med.group_id })}
+                                        style={{ marginRight: 12 }}
+                                    >
+                                        <Ionicons name="folder-outline" size={20} color="#8B5CF6" />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={() => handleDeleteMed(med.id!, med.name)}
+                                    >
+                                        <Ionicons name="trash-outline" size={20} color="#FF3B30" />
+                                    </TouchableOpacity>
                                 </View>
-                                <View className="ml-3 flex-1">
-                                    <Text className="text-gray-800 font-semibold">{med.name}</Text>
-                                    <Text className="text-gray-500 text-sm">
-                                        1일 {med.daily_freq}회 • {med.duration_days}일분
-                                    </Text>
-                                </View>
-                                <Ionicons name="trash-outline" size={20} color="#FF3B30" />
-                            </TouchableOpacity>
-                        ))
+                            );
+                        })
                     )}
                 </View>
             </View>
+
+            {/* Group Add/Edit Modal */}
+            <Modal
+                visible={showGroupModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowGroupModal(false)}
+            >
+                <View style={{
+                    flex: 1,
+                    backgroundColor: "rgba(0,0,0,0.5)",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    padding: 20,
+                }}>
+                    <View style={{
+                        backgroundColor: "white",
+                        borderRadius: 20,
+                        padding: 24,
+                        width: "100%",
+                        maxWidth: 340,
+                    }}>
+                        <Text style={{ fontSize: 20, fontWeight: "bold", color: "#1F2937", marginBottom: 16 }}>
+                            {editingGroup ? "그룹 이름 변경" : "새 그룹 추가"}
+                        </Text>
+                        <TextInput
+                            style={{
+                                backgroundColor: "#F3F4F6",
+                                borderRadius: 12,
+                                paddingHorizontal: 16,
+                                paddingVertical: 14,
+                                fontSize: 18,
+                                color: "#1F2937",
+                                marginBottom: 20,
+                            }}
+                            placeholder="예: 아침약, 저녁약"
+                            value={groupName}
+                            onChangeText={setGroupName}
+                            placeholderTextColor="#9CA3AF"
+                            autoFocus
+                        />
+                        <View style={{ flexDirection: "row", gap: 10 }}>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setShowGroupModal(false);
+                                    setEditingGroup(null);
+                                    setGroupName("");
+                                }}
+                                style={{
+                                    flex: 1,
+                                    paddingVertical: 14,
+                                    borderRadius: 12,
+                                    backgroundColor: "#F3F4F6",
+                                    alignItems: "center",
+                                }}
+                            >
+                                <Text style={{ fontSize: 16, fontWeight: "600", color: "#6B7280" }}>취소</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                onPress={editingGroup ? handleUpdateGroup : handleAddGroup}
+                                style={{
+                                    flex: 1,
+                                    paddingVertical: 14,
+                                    borderRadius: 12,
+                                    backgroundColor: "#007AFF",
+                                    alignItems: "center",
+                                }}
+                            >
+                                <Text style={{ fontSize: 16, fontWeight: "600", color: "white" }}>
+                                    {editingGroup ? "변경" : "추가"}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Med Group Assignment Modal */}
+            <Modal
+                visible={showMedGroupModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowMedGroupModal(false)}
+            >
+                <View style={{
+                    flex: 1,
+                    backgroundColor: "rgba(0,0,0,0.5)",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    padding: 20,
+                }}>
+                    <View style={{
+                        backgroundColor: "white",
+                        borderRadius: 20,
+                        padding: 24,
+                        width: "100%",
+                        maxWidth: 340,
+                    }}>
+                        <Text style={{ fontSize: 20, fontWeight: "bold", color: "#1F2937", marginBottom: 4 }}>
+                            그룹 변경
+                        </Text>
+                        <Text style={{ fontSize: 14, color: "#6B7280", marginBottom: 20 }}>
+                            {selectedMedForGroup?.name}
+                        </Text>
+                        <View style={{ gap: 8 }}>
+                            <TouchableOpacity
+                                onPress={() => handleAssignMedToGroup(null)}
+                                style={{
+                                    paddingVertical: 14,
+                                    paddingHorizontal: 16,
+                                    borderRadius: 12,
+                                    backgroundColor: selectedMedForGroup?.group_id == null ? "#F3F4F6" : "white",
+                                    borderWidth: 2,
+                                    borderColor: selectedMedForGroup?.group_id == null ? "#6B7280" : "#E5E7EB",
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                }}
+                            >
+                                <Ionicons name="close-circle-outline" size={20} color="#6B7280" />
+                                <Text style={{ fontSize: 16, color: "#374151", marginLeft: 10, fontWeight: "500" }}>없음</Text>
+                            </TouchableOpacity>
+                            {groups.map((group) => (
+                                <TouchableOpacity
+                                    key={group.id}
+                                    onPress={() => handleAssignMedToGroup(group.id!)}
+                                    style={{
+                                        paddingVertical: 14,
+                                        paddingHorizontal: 16,
+                                        borderRadius: 12,
+                                        backgroundColor: selectedMedForGroup?.group_id === group.id ? "#F5F3FF" : "white",
+                                        borderWidth: 2,
+                                        borderColor: selectedMedForGroup?.group_id === group.id ? "#8B5CF6" : "#E5E7EB",
+                                        flexDirection: "row",
+                                        alignItems: "center",
+                                    }}
+                                >
+                                    <Ionicons name="folder" size={20} color="#8B5CF6" />
+                                    <Text style={{ fontSize: 16, color: "#374151", marginLeft: 10, fontWeight: "500" }}>{group.name}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        <TouchableOpacity
+                            onPress={() => {
+                                setShowMedGroupModal(false);
+                                setSelectedMedForGroup(null);
+                            }}
+                            style={{
+                                marginTop: 16,
+                                paddingVertical: 14,
+                                borderRadius: 12,
+                                backgroundColor: "#F3F4F6",
+                                alignItems: "center",
+                            }}
+                        >
+                            <Text style={{ fontSize: 16, fontWeight: "600", color: "#6B7280" }}>닫기</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
 
             {/* App Info */}
             <View className="mt-6 mx-4 mb-8">

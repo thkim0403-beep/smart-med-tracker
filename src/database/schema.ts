@@ -1,11 +1,19 @@
 import * as SQLite from "expo-sqlite";
 
+export interface MedGroup {
+    id?: number;
+    name: string;
+}
+
 export interface Med {
     id?: number;
     name: string;
     daily_freq: number;
     duration_days: number;
     start_date: string;
+    group_id?: number | null;
+    ocr_text?: string | null;
+    memo?: string | null;
 }
 
 export interface Alarm {
@@ -58,7 +66,39 @@ export async function initDatabase(): Promise<void> {
       status TEXT NOT NULL CHECK(status IN ('taken', 'skipped')),
       FOREIGN KEY (med_id) REFERENCES Meds(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS MedGroups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL
+    );
   `);
+
+    // 마이그레이션: Meds 테이블에 group_id 컬럼 추가 (기존 DB 하위호환)
+    try {
+        await database.execAsync(
+            `ALTER TABLE Meds ADD COLUMN group_id INTEGER REFERENCES MedGroups(id) ON DELETE SET NULL`
+        );
+    } catch {
+        // 이미 컬럼이 존재하면 무시
+    }
+
+    // 마이그레이션: Meds 테이블에 ocr_text 컬럼 추가
+    try {
+        await database.execAsync(
+            `ALTER TABLE Meds ADD COLUMN ocr_text TEXT`
+        );
+    } catch {
+        // 이미 컬럼이 존재하면 무시
+    }
+
+    // 마이그레이션: Meds 테이블에 memo 컬럼 추가
+    try {
+        await database.execAsync(
+            `ALTER TABLE Meds ADD COLUMN memo TEXT`
+        );
+    } catch {
+        // 이미 컬럼이 존재하면 무시
+    }
 
     console.log("Database initialized successfully");
 }

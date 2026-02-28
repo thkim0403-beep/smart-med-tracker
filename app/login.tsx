@@ -6,6 +6,7 @@ import {
     ActivityIndicator,
     Image,
     Alert,
+    Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -19,6 +20,7 @@ export default function LoginScreen() {
         error,
         signInWithGoogle,
         signInWithNaver,
+        signInWithApple,
         loadStoredAuth,
         clearError,
     } = useAuthStore();
@@ -50,6 +52,10 @@ export default function LoginScreen() {
 
     const handleNaverLogin = async () => {
         await signInWithNaver();
+    };
+
+    const handleAppleLogin = async () => {
+        await signInWithApple();
     };
 
     if (isLoading) {
@@ -109,7 +115,7 @@ export default function LoginScreen() {
                 <TouchableOpacity
                     onPress={handleNaverLogin}
                     disabled={isLoading}
-                    className="rounded-2xl py-4 px-6 flex-row items-center justify-center mb-6"
+                    className="rounded-2xl py-4 px-6 flex-row items-center justify-center mb-4"
                     style={{
                         backgroundColor: "#03C75A",
                         shadowColor: "#03C75A",
@@ -124,6 +130,28 @@ export default function LoginScreen() {
                         네이버로 계속하기
                     </Text>
                 </TouchableOpacity>
+
+                {/* Apple Login Button (iOS only) */}
+                {Platform.OS === "ios" && (
+                    <TouchableOpacity
+                        onPress={handleAppleLogin}
+                        disabled={isLoading}
+                        className="rounded-2xl py-4 px-6 flex-row items-center justify-center mb-6"
+                        style={{
+                            backgroundColor: "#000000",
+                            shadowColor: "#000",
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.3,
+                            shadowRadius: 8,
+                            elevation: 4,
+                        }}
+                    >
+                        <Ionicons name="logo-apple" size={24} color="#FFFFFF" />
+                        <Text className="ml-3 text-white font-semibold text-lg">
+                            Apple로 계속하기
+                        </Text>
+                    </TouchableOpacity>
+                )}
 
                 {/* Terms Notice */}
                 <Text className="text-center text-gray-400 text-sm leading-5">
