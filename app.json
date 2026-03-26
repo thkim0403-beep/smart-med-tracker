@@ -20,7 +20,8 @@
       "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "약 봉투를 촬영하여 자동으로 약 정보를 인식하기 위해 카메라 접근이 필요합니다.",
-        "NSPhotoLibraryUsageDescription": "저장된 약 봉투 사진에서 약 정보를 인식하기 위해 사진 라이브러리 접근이 필요합니다."
+        "NSPhotoLibraryUsageDescription": "저장된 약 봉투 사진에서 약 정보를 인식하기 위해 사진 라이브러리 접근이 필요합니다.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -60,6 +61,19 @@
         {
           "icon": "./assets/icon.png",
           "color": "#007AFF"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.0"
+          },
+          "android": {
+            "minSdkVersion": 24,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
+          }
         }
       ]
     ],
